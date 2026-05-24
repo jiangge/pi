@@ -1,5 +1,5 @@
 import type { Component } from "../tui.ts";
-import { applyBackgroundToLine, visibleWidth } from "../utils.ts";
+import { applyBackgroundToLine, truncateToWidth, visibleWidth } from "../utils.ts";
 
 type RenderCache = {
 	childLines: string[];
@@ -126,6 +126,17 @@ export class Box implements Component {
 
 	private applyBg(line: string, width: number): string {
 		const visLen = visibleWidth(line);
+		if (visLen > width) {
+			// Safety clamp: truncate to fit within width before padding.
+			// This catches over-width lines from child components that ignore
+			// their allocated contentWidth (e.g., custom renderers returning
+			// raw lines wider than the requested size).
+			const truncated = truncateToWidth(line, width, "");
+			if (this.bgFn) {
+				return applyBackgroundToLine(truncated, width, this.bgFn);
+			}
+			return truncated + " ".repeat(width - visibleWidth(truncated));
+		}
 		const padNeeded = Math.max(0, width - visLen);
 		const padded = line + " ".repeat(padNeeded);
 
