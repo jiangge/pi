@@ -44,6 +44,10 @@ class FixedLineComponent implements Component {
 	invalidate(): void {}
 }
 
+function truncateByCodePointCount(text: string, maxCodePoints: number): string {
+	return Array.from(text).slice(0, maxCodePoints).join("");
+}
+
 describe("ToolExecutionComponent parity", () => {
 	beforeAll(() => {
 		initTheme("dark");
@@ -368,6 +372,38 @@ describe("ToolExecutionComponent parity", () => {
 		const renderedLines = component.render(width);
 		expect(renderedLines.some((line) => stripAnsi(line).includes("ctx_execute"))).toBe(true);
 		expect(renderedLines.every((line) => visibleWidth(line) <= width)).toBe(true);
+	});
+
+	test("clamps the CJK-width undercount pattern from tool output", () => {
+		const terminalWidth = 119;
+		const boxContentWidth = terminalWidth - 2;
+		const upstreamErrorLine =
+			'exact captured => 400 {"error":{"code":"bad_response_status_code","message":"来自上游渠道的报错: bad response status code ","type":"upstream_error"}}';
+		const codePointTruncatedLine = truncateByCodePointCount(upstreamErrorLine, boxContentWidth);
+
+		// A renderer that truncates by code point count can believe this line fits
+		// Box's 117-column content area, while its terminal width is actually 126
+		// because the Chinese text is double-width. Box then adds one left padding
+		// column, reproducing the 127-column line from the crash log.
+		expect(visibleWidth(codePointTruncatedLine)).toBe(126);
+		expect(visibleWidth(` ${codePointTruncatedLine}`)).toBe(127);
+
+		const toolDefinition: ToolDefinition = {
+			...createBaseToolDefinition("ctx_execute"),
+			renderResult: () => new FixedLineComponent(codePointTruncatedLine),
+		};
+		const component = new ToolExecutionComponent(
+			"ctx_execute",
+			"tool-cjk-width-undercount",
+			{},
+			{},
+			toolDefinition,
+			createFakeTui(),
+			process.cwd(),
+		);
+		component.updateResult({ content: [{ type: "text", text: "done" }], details: {}, isError: false }, false);
+
+		expect(component.render(terminalWidth).every((line) => visibleWidth(line) <= terminalWidth)).toBe(true);
 	});
 
 	test("trims trailing blank display lines from write previews", () => {
