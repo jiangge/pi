@@ -1,5 +1,5 @@
 import { join, resolve } from "node:path";
-import { Text, type TUI } from "@earendil-works/pi-tui";
+import { type Component, Text, type TUI, visibleWidth } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { beforeAll, describe, expect, test } from "vitest";
 import { getReadmePath } from "../src/config.ts";
@@ -28,6 +28,20 @@ function createFakeTui(): TUI {
 	return {
 		requestRender: () => {},
 	} as unknown as TUI;
+}
+
+class FixedLineComponent implements Component {
+	private readonly line: string;
+
+	constructor(line: string) {
+		this.line = line;
+	}
+
+	render(_width: number): string[] {
+		return [this.line];
+	}
+
+	invalidate(): void {}
 }
 
 describe("ToolExecutionComponent parity", () => {
@@ -331,6 +345,29 @@ describe("ToolExecutionComponent parity", () => {
 		const rendered = stripAnsi(component.render(120).join("\n"));
 		expect(rendered).toContain("custom_tool");
 		expect(rendered).toContain("done");
+	});
+
+	test("clamps over-width custom renderer output inside the default tool shell", () => {
+		const width = 40;
+		const toolDefinition: ToolDefinition = {
+			...createBaseToolDefinition("ctx_execute"),
+			renderResult: () => new FixedLineComponent("X".repeat(width + 17)),
+		};
+
+		const component = new ToolExecutionComponent(
+			"ctx_execute",
+			"tool-over-width-renderer",
+			{},
+			{},
+			toolDefinition,
+			createFakeTui(),
+			process.cwd(),
+		);
+		component.updateResult({ content: [{ type: "text", text: "done" }], details: {}, isError: false }, false);
+
+		const renderedLines = component.render(width);
+		expect(renderedLines.some((line) => stripAnsi(line).includes("ctx_execute"))).toBe(true);
+		expect(renderedLines.every((line) => visibleWidth(line) <= width)).toBe(true);
 	});
 
 	test("trims trailing blank display lines from write previews", () => {
