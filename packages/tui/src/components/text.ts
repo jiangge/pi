@@ -1,5 +1,5 @@
 import type { Component } from "../tui.ts";
-import { applyBackgroundToLine, visibleWidth, wrapTextWithAnsi } from "../utils.ts";
+import { applyBackgroundToLine, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "../utils.ts";
 
 /**
  * Text component - displays multi-line text with word wrapping
@@ -74,15 +74,22 @@ export class Text implements Component {
 		for (const line of wrappedLines) {
 			// Add margins
 			const lineWithMargins = leftMargin + line + rightMargin;
+			const visibleLen = visibleWidth(lineWithMargins);
+
+			// Safety clamp: if the line somehow exceeds width, truncate it
+			// instead of producing an over-width line that would crash the TUI.
+			// This should not happen from wrapTextWithAnsi but edge cases exist.
+			if (visibleLen > width) {
+				contentLines.push(truncateToWidth(lineWithMargins, width, ""));
+				continue;
+			}
 
 			// Apply background if specified (this also pads to full width)
 			if (this.customBgFn) {
 				contentLines.push(applyBackgroundToLine(lineWithMargins, width, this.customBgFn));
 			} else {
 				// No background - just pad to width with spaces
-				const visibleLen = visibleWidth(lineWithMargins);
-				const paddingNeeded = Math.max(0, width - visibleLen);
-				contentLines.push(lineWithMargins + " ".repeat(paddingNeeded));
+				contentLines.push(lineWithMargins + " ".repeat(width - visibleLen));
 			}
 		}
 
