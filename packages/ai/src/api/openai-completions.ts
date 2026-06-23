@@ -236,6 +236,12 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 					// carries parsed arguments.
 					delete block.partialArgs;
 					delete block.streamIndex;
+					// If the provider never sent an id for this tool call (some proxies
+					// deliver id after other fields or omit it entirely), synthesize one
+					// so downstream tool result routing has a non-empty call_id.
+					if (!block.id) {
+						block.id = `synth_${block.name || "unknown"}_${blocks.indexOf(block)}`;
+					}
 					stream.push({
 						type: "toolcall_end",
 						contentIndex,

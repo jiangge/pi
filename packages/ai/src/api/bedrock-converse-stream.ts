@@ -534,6 +534,11 @@ function handleContentBlockStop(
 			// Finalize in-place and strip the scratch buffer so replay only
 			// carries parsed arguments.
 			delete (block as Block).partialJson;
+			// If the provider never sent an id for this tool call, synthesize one
+			// so downstream tool result routing has a non-empty call_id.
+			if (!block.id) {
+				block.id = `synth_${block.name || "unknown"}_${index}`;
+			}
 			stream.push({ type: "toolcall_end", contentIndex: index, toolCall: block, partial: output });
 			break;
 	}
