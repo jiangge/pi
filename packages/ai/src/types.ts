@@ -567,6 +567,8 @@ export interface AnthropicMessagesCompat {
 	forceAdaptiveThinking?: boolean;
 	/** Whether to replay empty thinking signatures as `signature: ""` instead of converting thinking to text. Default: false. */
 	allowEmptySignature?: boolean;
+	/** Additional `anthropic-beta` feature flags to append to API requests (e.g. `"context-1m-2025-08-07"`). */
+	beta?: string[];
 }
 
 /**

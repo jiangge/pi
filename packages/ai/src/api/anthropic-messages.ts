@@ -166,6 +166,8 @@ export type AnthropicThinkingDisplay = "summarized" | "omitted";
 
 const FINE_GRAINED_TOOL_STREAMING_BETA = "fine-grained-tool-streaming-2025-05-14";
 const INTERLEAVED_THINKING_BETA = "interleaved-thinking-2025-05-14";
+const CONTEXT_1M_BETA = "context-1m-2025-08-07";
+const MODEL_1M_SUFFIX = /\[1m\]/i;
 
 function getAnthropicCompat(
 	model: Model<"anthropic-messages">,
@@ -177,6 +179,7 @@ function getAnthropicCompat(
 		supportsCacheControlOnTools: model.compat?.supportsCacheControlOnTools ?? true,
 		supportsTemperature: model.compat?.supportsTemperature ?? true,
 		allowEmptySignature: model.compat?.allowEmptySignature ?? false,
+		beta: model.compat?.beta ?? [],
 	};
 }
 
@@ -817,6 +820,14 @@ function createClient(
 	}
 	if (needsInterleavedBeta) {
 		betaFeatures.push(INTERLEAVED_THINKING_BETA);
+	}
+	for (const feature of model.compat?.beta ?? []) {
+		if (feature && !betaFeatures.includes(feature)) {
+			betaFeatures.push(feature);
+		}
+	}
+	if (MODEL_1M_SUFFIX.test(model.id) && !betaFeatures.includes(CONTEXT_1M_BETA)) {
+		betaFeatures.push(CONTEXT_1M_BETA);
 	}
 
 	// Copilot: Bearer auth, selective betas.

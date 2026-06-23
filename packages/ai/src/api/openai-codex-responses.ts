@@ -536,6 +536,7 @@ function resolveCodexServiceTier(
 function resolveCodexUrl(baseUrl?: string): string {
 	const raw = baseUrl && baseUrl.trim().length > 0 ? baseUrl : DEFAULT_CODEX_BASE_URL;
 	const normalized = raw.replace(/\/+$/, "");
+	if (normalized.endsWith("/responses")) return normalized;
 	if (normalized.endsWith("/codex/responses")) return normalized;
 	if (normalized.endsWith("/codex")) return `${normalized}/responses`;
 	return `${normalized}/codex/responses`;
@@ -1447,6 +1448,10 @@ async function parseErrorResponse(response: Response): Promise<{ message: string
 // ============================================================================
 
 function extractAccountId(token: string): string {
+	// API keys (sk-...) are not JWTs; return empty string for standard API key auth.
+	if (token.startsWith("sk-") || token.startsWith("aero_") || token.startsWith("yep_")) {
+		return "";
+	}
 	try {
 		const parts = token.split(".");
 		if (parts.length !== 3) throw new Error("Invalid token");
@@ -1481,10 +1486,18 @@ function buildBaseCodexHeaders(
 		}
 	}
 	headers.set("Authorization", `Bearer ${token}`);
-	headers.set("chatgpt-account-id", accountId);
-	headers.set("originator", "pi");
-	const userAgent = _os ? `pi (${_os.platform()} ${_os.release()}; ${_os.arch()})` : "pi (browser)";
-	headers.set("User-Agent", userAgent);
+	if (accountId) {
+		headers.set("chatgpt-account-id", accountId);
+	}
+	// Respect custom originator from provider headers; fall back to "pi"
+	if (!headers.has("originator")) {
+		headers.set("originator", "pi");
+	}
+	// Respect custom User-Agent from provider headers; fall back to pi default
+	if (!headers.has("User-Agent") && !headers.has("user-agent")) {
+		const userAgent = _os ? `pi (${_os.platform()} ${_os.release()}; ${_os.arch()})` : "pi (browser)";
+		headers.set("User-Agent", userAgent);
+	}
 	return headers;
 }
 

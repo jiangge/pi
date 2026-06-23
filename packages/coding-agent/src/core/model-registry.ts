@@ -147,6 +147,7 @@ const AnthropicMessagesCompatSchema = Type.Object({
 	sendSessionAffinityHeaders: Type.Optional(Type.Boolean()),
 	supportsCacheControlOnTools: Type.Optional(Type.Boolean()),
 	forceAdaptiveThinking: Type.Optional(Type.Boolean()),
+	beta: Type.Optional(Type.Array(Type.String())),
 });
 
 const ProviderCompatSchema = Type.Union([
@@ -307,7 +308,17 @@ function mergeCompat(
 		};
 	}
 
+	const baseAnthropic = base as AnthropicMessagesCompat | undefined;
+	const overrideAnthropic = override as AnthropicMessagesCompat;
+	const mergedAnthropic = merged as AnthropicMessagesCompat;
+	mergedAnthropic.beta = mergeBetaArrays(baseAnthropic ?? {}, overrideAnthropic);
+
 	return merged as Model<Api>["compat"];
+}
+
+function mergeBetaArrays<T extends { beta?: string[] }>(base: T, override: T): string[] | undefined {
+	if (!base.beta && !override.beta) return undefined;
+	return [...(base.beta ?? []), ...(override.beta ?? [])];
 }
 
 /**
