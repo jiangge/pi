@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed `pi install` and `pi remove` to report an error and exit non-zero when settings cannot be persisted (e.g. a read-only `settings.json`), instead of printing "Installed"/"Removed" while silently dropping the settings change.
+
 ## [0.80.2] - 2026-06-23
 
 ### Changed

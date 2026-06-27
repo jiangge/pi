@@ -1,4 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+
+// chmod-based permission tests are unreliable where the owner can still write
+// read-only files (root) or where POSIX permissions are not enforced (Windows).
+const cannotTestSettingsWriteFailure =
+	process.platform === "win32" || (typeof process.getuid === "function" && process.getuid() === 0);
+
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -603,4 +609,38 @@ if(args.includes("install")) process.exit(23);
 			logSpy.mockRestore();
 		}
 	});
+
+	it.skipIf(cannotTestSettingsWriteFailure)(
+		"reports an error and exits non-zero when settings cannot be persisted during install",
+		async () => {
+			const relativePkgDir = join(projectDir, "packages", "local-package");
+			mkdirSync(relativePkgDir, { recursive: true });
+
+			const settingsPath = join(agentDir, "settings.json");
+			writeFileSync(settingsPath, `${JSON.stringify({ packages: [] }, null, 2)}\n`, "utf-8");
+			chmodSync(settingsPath, 0o444);
+			try {
+				const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+				const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+				try {
+					await main(["install", "./packages/local-package"]);
+
+					expect(process.exitCode).toBe(1);
+					const stdout = logSpy.mock.calls.map(([message]) => String(message)).join("\n");
+					const stderr = errorSpy.mock.calls.map(([message]) => String(message)).join("\n");
+					expect(stdout).not.toContain("Installed");
+					expect(stderr).toContain("Failed to persist");
+					expect(stderr).toMatch(/EACCES|permission/i);
+
+					const settings = JSON.parse(readFileSync(settingsPath, "utf-8")) as { packages?: string[] };
+					expect(settings.packages ?? []).toHaveLength(0);
+				} finally {
+					errorSpy.mockRestore();
+					logSpy.mockRestore();
+				}
+			} finally {
+				chmodSync(settingsPath, 0o600);
+			}
+		},
+	);
 });

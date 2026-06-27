@@ -74,6 +74,25 @@ function reportSettingsErrors(settingsManager: SettingsManager, context: string)
 	}
 }
 
+/** Flushes pending settings writes and reports any that failed.
+ * Settings writes are queued asynchronously, so a write failure (e.g. a
+ * read-only settings.json) is recorded but never thrown back to the caller.
+ * Returns true (and sets exitCode) when a persisted install/remove silently
+ * failed, so the caller must not print a success message. */
+async function reportPendingSettingsWriteErrors(settingsManager: SettingsManager, source: string): Promise<boolean> {
+	await settingsManager.flush();
+	const errors = settingsManager.drainErrors();
+	if (errors.length === 0) return false;
+	for (const { scope, error } of errors) {
+		console.error(chalk.red(`Failed to persist ${source} to ${scope} settings: ${error.message}`));
+		if (error.stack) {
+			console.error(chalk.dim(error.stack));
+		}
+	}
+	process.exitCode = 1;
+	return true;
+}
+
 function getPackageCommandUsage(command: PackageCommand): string {
 	switch (command) {
 		case "install":
@@ -652,6 +671,7 @@ export async function handlePackageCommand(
 		switch (options.command) {
 			case "install":
 				await packageManager.installAndPersist(source!, { local: options.local });
+				if (await reportPendingSettingsWriteErrors(settingsManager, source!)) return true;
 				console.log(chalk.green(`Installed ${source}`));
 				return true;
 
@@ -662,6 +682,7 @@ export async function handlePackageCommand(
 					process.exitCode = 1;
 					return true;
 				}
+				if (await reportPendingSettingsWriteErrors(settingsManager, source!)) return true;
 				console.log(chalk.green(`Removed ${source}`));
 				return true;
 			}
